@@ -1,0 +1,70 @@
+---
+- name: Deploy Web Application using Nginx
+  hosts: webservers
+  become: yes
+
+  vars:
+    app_name: "my-web-app"
+    app_directory: "/var/www/my-web-app"
+    nginx_port: 80
+    server_name: "_"
+    nginx_site: "my-web-app"
+
+  tasks:
+
+    - name: Update apt package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: "0755"
+
+    - name: Copy web application files
+      copy:
+        src: "files/"
+        dest: "{{ app_directory }}/"
+        owner: www-data
+        group: www-data
+        mode: "0644"
+
+    - name: Deploy Nginx configuration
+      template:
+        src: "templates/nginx.confg.j2"
+        dest: "/etc/nginx/sites-available/{{ nginx_site }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Enable Nginx site
+      file:
+        src: "/etc/nginx/sites-available/{{ nginx_site }}"
+        dest: "/etc/nginx/sites-enabled/{{ nginx_site }}"
+        state: link
+
+    - name: Remove default Nginx site
+      file:
+        path: "/etc/nginx/sites-enabled/default"
+        state: absent
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test
+      changed_when: false
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+        enabled: yes
+      when: nginx_test.rc == 0
